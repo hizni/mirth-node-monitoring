@@ -1,0 +1,13 @@
+{
+    "name": "HttpServer",
+    "version": "0.0.1",
+    "description": "Simple http server example",
+    "dependencies": {
+		"http": "latest",
+        "socket.io": "latest",
+        "highcharts":"latest",
+		"jquery":"latest",
+        "CBuffer":"latest"
+    },
+    "author": "me"
+}

@@ -1,0 +1,136 @@
+<html>
+<body>
+
+<script src="node_modules/jquery/dist/jquery.min.js"></script>
+<script src="node_modules/highcharts/scripts/highcharts.js"></script>
+<script src="http://localhost:8001/socket.io/socket.io.js"></script>
+
+<div id="cpu_chart" style="min-width: 400px; height: 400px; margin: 0 auto"></div>
+<!-- <div id="ram_used_chart" style="min-width: 400px; height: 400px; margin: 0 auto"></div> -->
+<script>
+var socket = io.connect('http://localhost:8001');
+
+$(function () {
+    $(document).ready(function () {
+        Highcharts.setOptions({
+            global: {
+                useUTC: false
+            }
+        });
+
+        $('#cpu_chart').highcharts({
+            chart: {
+                type: 'spline',
+                animation: Highcharts.svg, // don't animate in old IE
+                marginRight: 10,
+                events: {
+                    load: function () {                    	
+                        var series = this.series[0];
+				    	socket.on('channelSentCPU', function (data) {
+                            //console.log(data.x);
+					    	// when a sample arrives we plot it
+                            if (series.data.length < 500){
+                                series.addPoint([data.x, data.y2]);
+                            } else {
+                                //scroll and redraw
+                                series.addPoint([data.x, data.y2], true, true); 
+                            }                           
+					    });
+
+                        /*var sentSeries = this.series[0];
+                        var cpuSeries = this.series[1];
+                        socket.on('channelSentCPU', function (data) {
+                            //console.log(data.x);
+                            // when a sample arrives we plot it
+                            if (sentSeries.data.length < 500){
+                                sentSeries.addPoint([data.x, data.y1]);
+                                cpuSeries.addPoint([data.x, data.y2]);
+                            } else {
+                                //scroll and redraw
+                                sentSeries.addPoint([data.x, data.y1], true, true); 
+                                cpuSeries.addPoint([data.x, data.y2], true, true); 
+                            }                           
+                        });*/
+                    }
+                }
+            },
+            title: {
+                text: 'Message received and % CPU used vs. time '
+            },
+            xAxis: {
+                type: 'datetime',
+                tickPixelInterval: 150
+            },
+            yAxis: {
+                title: {
+                    text: 'Value'
+                },
+                plotLines: [{
+                    value: 0,
+                    width: 1,
+                    color: '#808080'
+                }]
+            },
+            /*yAxis: [
+                //primary y axis
+                {
+                    title: {
+                        text: 'Messages'
+                    },
+                    plotLines: [{
+                        value: 0,
+                        width: 1,
+                        color: '#808080'
+                    }]
+                },
+                //secondary y axis
+                {
+                    title: {
+                        text: 'Value'
+                    },
+                    plotLines: [{
+                        value: 0,
+                        width: 1,
+                        color: '#808080'
+                    }]
+                }
+            ],*/
+            tooltip: {
+                formatter: function () {
+                    return '<b>' + this.series.name + '</b><br/>' +
+                        Highcharts.dateFormat('%Y-%m-%d %H:%M:%S', this.x) + '<br/>' +
+                        Highcharts.numberFormat(this.y, 2);
+                }
+            },
+            legend: {
+                enabled: false
+            },
+            exporting: {
+                enabled: false
+            },
+            series: [{
+            	name: '% CPU used',
+                data: [[new Date().getTime(), null]]             
+			}]
+            /*series: [
+                {
+                    name: 'Messages',
+                    type: "column",
+                    yAxis: 1,
+                    data: [[new Date().getTime(), null]]             
+                },
+                {
+                    name: '% CPU used',
+                    type: "spline",
+                    yAxis: 2,
+                    data: [[new Date().getTime(), null]]             
+                }
+            ]*/
+        });
+    });
+});
+</script>
+
+
+</body>
+</html>

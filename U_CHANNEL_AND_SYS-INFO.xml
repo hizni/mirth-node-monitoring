@@ -1,0 +1,394 @@
+<channel version="3.1.1">
+  <id>7434cfd2-aaba-4f06-a8ee-eca22e6cde06</id>
+  <nextMetaDataId>4</nextMetaDataId>
+  <name>U_CHANNEL_AND_SYS-INFO</name>
+  <description>A version of the system monitoring channel that gathers and sends statistics for channels and system properties at a given instance.
+
+Channel stats gathered
+	- send
+	- received
+	- queued
+	- errored
+System stats gathered
+	- cpu used
+	- RAM used
+
+Sent as a JSON string </description>
+  <enabled>true</enabled>
+  <lastModified>
+    <time>1424443715964</time>
+    <timezone>Europe/London</timezone>
+  </lastModified>
+  <revision>179</revision>
+  <sourceConnector version="3.1.1">
+    <metaDataId>0</metaDataId>
+    <name>sourceConnector</name>
+    <properties class="com.mirth.connect.connectors.js.JavaScriptReceiverProperties" version="3.1.1">
+      <pluginProperties/>
+      <pollConnectorProperties version="3.1.1">
+        <pollingType>interval</pollingType>
+        <pollingHour>0</pollingHour>
+        <pollingMinute>0</pollingMinute>
+        <pollingFrequency>5000</pollingFrequency>
+      </pollConnectorProperties>
+      <sourceConnectorProperties version="3.1.1">
+        <responseVariable>None</responseVariable>
+        <respondAfterProcessing>true</respondAfterProcessing>
+        <processBatch>false</processBatch>
+        <firstResponse>false</firstResponse>
+      </sourceConnectorProperties>
+      <script>
+// capture statistics for a list of named channels and returns data as a JSON object
+var capture = function(monitoredChannelsArray){
+	var _sigar= new Packages.org.hyperic.sigar.Sigar();
+	var _channelController = new Packages.com.mirth.connect.server.controllers.ControllerFactory.getFactory().createChannelController();
+
+	this.generateJson = function() { 
+		var json = {
+					//&quot;time&quot;:DateUtil.getDate(&quot;yyyyMMddHHmmss&quot;, DateUtil.getCurrentDate(&quot;yyyyMMddHHmmss&quot;)).getTime(),
+					&quot;time&quot;:Number(DateUtil.getDate(&quot;yyyyMMddHHmmss&quot;, DateUtil.getCurrentDate(&quot;yyyyMMddHHmmss&quot;)).getTime()),
+				    &quot;cpu&quot;: _sigar.getCpuPerc().getIdle(),
+					&quot;ram&quot;: _sigar.getMem().getUsedPercent(),
+					&quot;channels&quot;:[]
+				   };
+		return json;
+	};
+	this.channelStats = function(channelNameOrID){
+		var channel = _channelController.getDeployedChannelByName(channelNameOrID);
+		//var channelJson;
+		if (channel == null)
+			channel = _channelController.getDeployedChannelById(channelNameOrID);
+
+		if (channel == null){
+			logger.error(&quot;Channel not deployed - &quot; + channelNameOrID);
+		}
+
+		if (channel != null){
+			var dashboardStatus = getDashboardStatus(channel, 0); //get statistics for source connector
+			
+			var channelJson = {
+			 &quot;name&quot;: new String(channel.getName()),
+			 &quot;source&quot;:{
+						&quot;id&quot;: &quot;0&quot;,
+						//&quot;received&quot;: parseInt(dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.RECEIVED)),
+						&quot;received&quot;: dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.RECEIVED) != null ? parseInt(dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.RECEIVED)) : null,
+						//&quot;errored&quot;:  parseInt(dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.ERROR)),
+						&quot;errored&quot;: dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.ERROR) != null ? parseInt(dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.ERROR)) : null,
+						//&quot;filtered&quot;: parseInt(dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.FILTERED)),
+						&quot;filtered&quot;: dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.FILTERED) != null ? parseInt(dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.FILTERED)) : null,
+						//&quot;queued&quot;:   parseInt(dashboardStatus.getQueued()),
+						&quot;queued&quot;:   dashboardStatus.getQueued()!= null ? parseInt(dashboardStatus.getQueued()) : null,
+						//&quot;sent&quot;:		parseInt(dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.SENT)),
+						&quot;sent&quot;: dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.SENT) != null ? parseInt(dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.SENT)) : null
+					  },
+			&quot;destinations&quot;:[]
+			};
+
+			var enabledConnectorsList = channel.getEnabledDestinationConnectors(); 
+			for (var i = 0; i &lt; enabledConnectorsList.size(); i++){
+				var metadataID = enabledConnectorsList.get(i).getMetaDataId();
+					if (metadataID != null){
+					var dashboardStatus = getDashboardStatus(channel, metadataID);  //get statistics for destination connector(s)
+					channelJson.destinations.push({
+												//&quot;id&quot;:		new String(metadataID),
+												&quot;id&quot;:		metadataID != null ? new String(metadataID):null,
+												//&quot;received&quot;: parseInt(dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.RECEIVED)),
+												&quot;received&quot;: dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.RECEIVED) != null ? parseInt(dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.RECEIVED)) : null,
+												//&quot;errored&quot;:  parseInt(dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.ERROR)),
+												&quot;errored&quot;: dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.ERROR) != null ? parseInt(dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.ERROR)) : null,
+												//&quot;filtered&quot;: parseInt(dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.FILTERED)),
+												&quot;filtered&quot;: dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.FILTERED) != null ? parseInt(dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.FILTERED)) : null,
+												//&quot;queued&quot;:   parseInt(dashboardStatus.getQueued()),
+												&quot;queued&quot;:   dashboardStatus.getQueued()!= null ? parseInt(dashboardStatus.getQueued()) : null,
+												//&quot;sent&quot;:		parseInt(dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.SENT)),
+												&quot;sent&quot;: dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.SENT) != null ? parseInt(dashboardStatus.getLifetimeStatistics().get(com.mirth.connect.donkey.model.message.Status.SENT)) : null
+											  });
+				}
+			}
+		}
+		return channelJson;
+	};
+
+	this.getJson = function(){
+		var x = this.generateJson();	
+		for (var i = 0; i &lt; monitoredChannelsArray.length; i++){
+			var channelStats = this.channelStats(monitoredChannelsArray[i]);
+			if (channelStats != null)
+				x.channels.push(channelStats);
+		}
+		return x;
+	};
+}
+
+var bar = new capture([&apos;U_CHANNEL_AND_SYS-INFO&apos;]);
+var barJson = JSON.stringify(bar.getJson()); //produces JSON string
+//logger.info(&quot;JSON : &quot; + barJson);
+return (barJson);
+</script>
+    </properties>
+    <transformer version="3.1.1">
+      <steps/>
+      <inboundTemplate encoding="base64"></inboundTemplate>
+      <outboundTemplate encoding="base64"></outboundTemplate>
+      <inboundDataType>DELIMITED</inboundDataType>
+      <outboundDataType>DELIMITED</outboundDataType>
+      <inboundProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedDataTypeProperties" version="3.1.1">
+        <serializationProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedSerializationProperties" version="3.1.1">
+          <columnDelimiter>,</columnDelimiter>
+          <recordDelimiter>\n</recordDelimiter>
+          <quoteChar>&quot;</quoteChar>
+          <escapeWithDoubleQuote>true</escapeWithDoubleQuote>
+          <quoteEscapeChar>\</quoteEscapeChar>
+          <numberedRows>false</numberedRows>
+          <ignoreCR>true</ignoreCR>
+        </serializationProperties>
+        <deserializationProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedDeserializationProperties" version="3.1.1">
+          <columnDelimiter>,</columnDelimiter>
+          <recordDelimiter>\n</recordDelimiter>
+          <quoteChar>&quot;</quoteChar>
+          <escapeWithDoubleQuote>true</escapeWithDoubleQuote>
+          <quoteEscapeChar>\</quoteEscapeChar>
+        </deserializationProperties>
+        <batchProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedBatchProperties" version="3.1.1">
+          <splitType>Record</splitType>
+          <batchSkipRecords>0</batchSkipRecords>
+          <batchMessageDelimiter></batchMessageDelimiter>
+          <batchMessageDelimiterIncluded>false</batchMessageDelimiterIncluded>
+          <batchGroupingColumn></batchGroupingColumn>
+          <batchScript></batchScript>
+        </batchProperties>
+      </inboundProperties>
+      <outboundProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedDataTypeProperties" version="3.1.1">
+        <serializationProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedSerializationProperties" version="3.1.1">
+          <columnDelimiter>,</columnDelimiter>
+          <recordDelimiter>\n</recordDelimiter>
+          <quoteChar>&quot;</quoteChar>
+          <escapeWithDoubleQuote>true</escapeWithDoubleQuote>
+          <quoteEscapeChar>\</quoteEscapeChar>
+          <numberedRows>false</numberedRows>
+          <ignoreCR>true</ignoreCR>
+        </serializationProperties>
+        <deserializationProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedDeserializationProperties" version="3.1.1">
+          <columnDelimiter>,</columnDelimiter>
+          <recordDelimiter>\n</recordDelimiter>
+          <quoteChar>&quot;</quoteChar>
+          <escapeWithDoubleQuote>true</escapeWithDoubleQuote>
+          <quoteEscapeChar>\</quoteEscapeChar>
+        </deserializationProperties>
+        <batchProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedBatchProperties" version="3.1.1">
+          <splitType>Record</splitType>
+          <batchSkipRecords>0</batchSkipRecords>
+          <batchMessageDelimiter></batchMessageDelimiter>
+          <batchMessageDelimiterIncluded>false</batchMessageDelimiterIncluded>
+          <batchGroupingColumn></batchGroupingColumn>
+          <batchScript></batchScript>
+        </batchProperties>
+      </outboundProperties>
+    </transformer>
+    <filter version="3.1.1">
+      <rules/>
+    </filter>
+    <transportName>JavaScript Reader</transportName>
+    <mode>SOURCE</mode>
+    <enabled>true</enabled>
+    <waitForPrevious>true</waitForPrevious>
+  </sourceConnector>
+  <destinationConnectors>
+    <connector version="3.1.1">
+      <metaDataId>1</metaDataId>
+      <name>Destination 1</name>
+      <properties class="com.mirth.connect.connectors.tcp.TcpDispatcherProperties" version="3.1.1">
+        <pluginProperties/>
+        <destinationConnectorProperties version="3.1.1">
+          <queueEnabled>false</queueEnabled>
+          <sendFirst>false</sendFirst>
+          <retryIntervalMillis>10000</retryIntervalMillis>
+          <regenerateTemplate>false</regenerateTemplate>
+          <retryCount>0</retryCount>
+          <rotate>false</rotate>
+          <threadCount>1</threadCount>
+          <validateResponse>true</validateResponse>
+        </destinationConnectorProperties>
+        <transmissionModeProperties class="com.mirth.connect.model.transmission.framemode.FrameModeProperties">
+          <pluginPointName>Basic</pluginPointName>
+          <startOfMessageBytes></startOfMessageBytes>
+          <endOfMessageBytes></endOfMessageBytes>
+        </transmissionModeProperties>
+        <remoteAddress>127.0.0.1</remoteAddress>
+        <remotePort>3000</remotePort>
+        <overrideLocalBinding>false</overrideLocalBinding>
+        <localAddress>0.0.0.0</localAddress>
+        <localPort>0</localPort>
+        <sendTimeout>5000</sendTimeout>
+        <bufferSize>65536</bufferSize>
+        <keepConnectionOpen>false</keepConnectionOpen>
+        <checkRemoteHost>false</checkRemoteHost>
+        <responseTimeout>5000</responseTimeout>
+        <ignoreResponse>false</ignoreResponse>
+        <queueOnResponseTimeout>true</queueOnResponseTimeout>
+        <dataTypeBinary>false</dataTypeBinary>
+        <charsetEncoding>DEFAULT_ENCODING</charsetEncoding>
+        <template>${message.encodedData}</template>
+      </properties>
+      <transformer version="3.1.1">
+        <steps/>
+        <inboundDataType>DELIMITED</inboundDataType>
+        <outboundDataType>DELIMITED</outboundDataType>
+        <inboundProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedDataTypeProperties" version="3.1.1">
+          <serializationProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedSerializationProperties" version="3.1.1">
+            <columnDelimiter>,</columnDelimiter>
+            <recordDelimiter>\n</recordDelimiter>
+            <quoteChar>&quot;</quoteChar>
+            <escapeWithDoubleQuote>true</escapeWithDoubleQuote>
+            <quoteEscapeChar>\</quoteEscapeChar>
+            <numberedRows>false</numberedRows>
+            <ignoreCR>true</ignoreCR>
+          </serializationProperties>
+          <deserializationProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedDeserializationProperties" version="3.1.1">
+            <columnDelimiter>,</columnDelimiter>
+            <recordDelimiter>\n</recordDelimiter>
+            <quoteChar>&quot;</quoteChar>
+            <escapeWithDoubleQuote>true</escapeWithDoubleQuote>
+            <quoteEscapeChar>\</quoteEscapeChar>
+          </deserializationProperties>
+          <batchProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedBatchProperties" version="3.1.1">
+            <splitType>Record</splitType>
+            <batchSkipRecords>0</batchSkipRecords>
+            <batchMessageDelimiter></batchMessageDelimiter>
+            <batchMessageDelimiterIncluded>false</batchMessageDelimiterIncluded>
+            <batchGroupingColumn></batchGroupingColumn>
+            <batchScript></batchScript>
+          </batchProperties>
+        </inboundProperties>
+        <outboundProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedDataTypeProperties" version="3.1.1">
+          <serializationProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedSerializationProperties" version="3.1.1">
+            <columnDelimiter>,</columnDelimiter>
+            <recordDelimiter>\n</recordDelimiter>
+            <quoteChar>&quot;</quoteChar>
+            <escapeWithDoubleQuote>true</escapeWithDoubleQuote>
+            <quoteEscapeChar>\</quoteEscapeChar>
+            <numberedRows>false</numberedRows>
+            <ignoreCR>true</ignoreCR>
+          </serializationProperties>
+          <deserializationProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedDeserializationProperties" version="3.1.1">
+            <columnDelimiter>,</columnDelimiter>
+            <recordDelimiter>\n</recordDelimiter>
+            <quoteChar>&quot;</quoteChar>
+            <escapeWithDoubleQuote>true</escapeWithDoubleQuote>
+            <quoteEscapeChar>\</quoteEscapeChar>
+          </deserializationProperties>
+          <batchProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedBatchProperties" version="3.1.1">
+            <splitType>Record</splitType>
+            <batchSkipRecords>0</batchSkipRecords>
+            <batchMessageDelimiter></batchMessageDelimiter>
+            <batchMessageDelimiterIncluded>false</batchMessageDelimiterIncluded>
+            <batchGroupingColumn></batchGroupingColumn>
+            <batchScript></batchScript>
+          </batchProperties>
+        </outboundProperties>
+      </transformer>
+      <responseTransformer version="3.1.1">
+        <steps/>
+        <inboundDataType>DELIMITED</inboundDataType>
+        <outboundDataType>DELIMITED</outboundDataType>
+        <inboundProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedDataTypeProperties" version="3.1.1">
+          <serializationProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedSerializationProperties" version="3.1.1">
+            <columnDelimiter>,</columnDelimiter>
+            <recordDelimiter>\n</recordDelimiter>
+            <quoteChar>&quot;</quoteChar>
+            <escapeWithDoubleQuote>true</escapeWithDoubleQuote>
+            <quoteEscapeChar>\</quoteEscapeChar>
+            <numberedRows>false</numberedRows>
+            <ignoreCR>true</ignoreCR>
+          </serializationProperties>
+          <deserializationProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedDeserializationProperties" version="3.1.1">
+            <columnDelimiter>,</columnDelimiter>
+            <recordDelimiter>\n</recordDelimiter>
+            <quoteChar>&quot;</quoteChar>
+            <escapeWithDoubleQuote>true</escapeWithDoubleQuote>
+            <quoteEscapeChar>\</quoteEscapeChar>
+          </deserializationProperties>
+          <batchProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedBatchProperties" version="3.1.1">
+            <splitType>Record</splitType>
+            <batchSkipRecords>0</batchSkipRecords>
+            <batchMessageDelimiter></batchMessageDelimiter>
+            <batchMessageDelimiterIncluded>false</batchMessageDelimiterIncluded>
+            <batchGroupingColumn></batchGroupingColumn>
+            <batchScript></batchScript>
+          </batchProperties>
+        </inboundProperties>
+        <outboundProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedDataTypeProperties" version="3.1.1">
+          <serializationProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedSerializationProperties" version="3.1.1">
+            <columnDelimiter>,</columnDelimiter>
+            <recordDelimiter>\n</recordDelimiter>
+            <quoteChar>&quot;</quoteChar>
+            <escapeWithDoubleQuote>true</escapeWithDoubleQuote>
+            <quoteEscapeChar>\</quoteEscapeChar>
+            <numberedRows>false</numberedRows>
+            <ignoreCR>true</ignoreCR>
+          </serializationProperties>
+          <deserializationProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedDeserializationProperties" version="3.1.1">
+            <columnDelimiter>,</columnDelimiter>
+            <recordDelimiter>\n</recordDelimiter>
+            <quoteChar>&quot;</quoteChar>
+            <escapeWithDoubleQuote>true</escapeWithDoubleQuote>
+            <quoteEscapeChar>\</quoteEscapeChar>
+          </deserializationProperties>
+          <batchProperties class="com.mirth.connect.plugins.datatypes.delimited.DelimitedBatchProperties" version="3.1.1">
+            <splitType>Record</splitType>
+            <batchSkipRecords>0</batchSkipRecords>
+            <batchMessageDelimiter></batchMessageDelimiter>
+            <batchMessageDelimiterIncluded>false</batchMessageDelimiterIncluded>
+            <batchGroupingColumn></batchGroupingColumn>
+            <batchScript></batchScript>
+          </batchProperties>
+        </outboundProperties>
+      </responseTransformer>
+      <filter version="3.1.1">
+        <rules/>
+      </filter>
+      <transportName>TCP Sender</transportName>
+      <mode>DESTINATION</mode>
+      <enabled>true</enabled>
+      <waitForPrevious>true</waitForPrevious>
+    </connector>
+  </destinationConnectors>
+  <preprocessingScript>// Modify the message variable below to pre process data
+return message;</preprocessingScript>
+  <postprocessingScript>// This script executes once after a message has been processed
+// Responses returned from here will be stored as &quot;Postprocessor&quot; in the response map
+return;</postprocessingScript>
+  <deployScript>// This script executes once when the channel is deployed
+// You only have access to the globalMap and globalChannelMap here to persist data
+return;</deployScript>
+  <undeployScript>// This script executes once when the channel is undeployed
+// You only have access to the globalMap and globalChannelMap here to persist data
+return;</undeployScript>
+  <properties version="3.1.1">
+    <clearGlobalChannelMap>true</clearGlobalChannelMap>
+    <messageStorageMode>DEVELOPMENT</messageStorageMode>
+    <encryptData>false</encryptData>
+    <removeContentOnCompletion>false</removeContentOnCompletion>
+    <removeAttachmentsOnCompletion>false</removeAttachmentsOnCompletion>
+    <initialState>STARTED</initialState>
+    <storeAttachments>false</storeAttachments>
+    <tags class="linked-hash-set"/>
+    <metaDataColumns>
+      <metaDataColumn>
+        <name>SOURCE</name>
+        <type>STRING</type>
+        <mappingName>mirth_source</mappingName>
+      </metaDataColumn>
+      <metaDataColumn>
+        <name>TYPE</name>
+        <type>STRING</type>
+        <mappingName>mirth_type</mappingName>
+      </metaDataColumn>
+    </metaDataColumns>
+    <attachmentProperties>
+      <type>None</type>
+      <properties/>
+    </attachmentProperties>
+    <archiveEnabled>true</archiveEnabled>
+  </properties>
+</channel>
